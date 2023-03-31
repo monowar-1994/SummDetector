@@ -1,10 +1,10 @@
 import parser_1 as ps
+import pg8000
 import db_classes as orm
 import json
 import traceback
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-import psycopg2
 import multiprocessing as mp
 import psutil
 from datetime import datetime as dt
@@ -80,17 +80,17 @@ def bulk_dump_in_db(objects, connection_string, batch_size = 100000):
 
 
 
-data_files = [
-    '/mnt/8tb/csenrc/tc3/data/cadets/ta1-cadets-e3-official.json',
-    '/mnt/8tb/csenrc/tc3/data/cadets/ta1-cadets-e3-official.json.1',
-    '/mnt/8tb/csenrc/tc3/data/cadets/ta1-cadets-e3-official.json.2',
-    '/mnt/8tb/csenrc/tc3/data/cadets/ta1-cadets-e3-official-1.json',
-    '/mnt/8tb/csenrc/tc3/data/cadets/ta1-cadets-e3-official-1.json.1',
-    '/mnt/8tb/csenrc/tc3/data/cadets/ta1-cadets-e3-official-1.json.2',
-    '/mnt/8tb/csenrc/tc3/data/cadets/ta1-cadets-e3-official-1.json.3',
-    '/mnt/8tb/csenrc/tc3/data/cadets/ta1-cadets-e3-official-1.json.4',
-    '/mnt/8tb/csenrc/tc3/data/cadets/ta1-cadets-e3-official-2.json',
-    '/mnt/8tb/csenrc/tc3/data/cadets/ta1-cadets-e3-official-2.json.1'
+cadet_data_files = [
+    '/home/anjumm1/Documents/cadets/ta1-cadets-e3-official-1.json.3',
+    '/home/anjumm1/Documents/cadets/ta1-cadets-e3-official.json.2',
+    '/home/anjumm1/Documents/cadets/ta1-cadets-e3-official.json',
+    '/home/anjumm1/Documents/cadets/ta1-cadets-e3-official-1.json',
+    '/home/anjumm1/Documents/cadets/ta1-cadets-e3-official.json.1',
+    '/home/anjumm1/Documents/cadets/ta1-cadets-e3-official-2.json',
+    '/home/anjumm1/Documents/cadets/ta1-cadets-e3-official-1.json.4',
+    '/home/anjumm1/Documents/cadets/ta1-cadets-e3-official-1.json.2',
+    '/home/anjumm1/Documents/cadets/ta1-cadets-e3-official-1.json.1',
+    '/home/anjumm1/Documents/cadets/ta1-cadets-e3-official-2.json.1'
 ]
 
 theia_data_files = [
@@ -353,7 +353,7 @@ def task(data_file_list):
     principal_count = 0
     provenance_tag_node_count = 0
 
-    psql_connection_url = 'postgresql+psycopg2://csephase2:csephase@@localhost/darpa_trace'
+    psql_connection_url = 'postgresql+pg8000://cpsc538p:12345678@localhost/darpa_tc3_cadets'
 
     for data_file_name in data_file_list:
         print("Parsing file: {}".format(data_file_name))
@@ -432,13 +432,29 @@ def task(data_file_list):
 start_time = dt.now()
 print("Starting time of the program: {}".format(str(start_time)))
 
-total_cpus = psutil.cpu_count()
-allocated_cpus = (total_cpus //2) + 3
-print("Total allocated cpus: {}".format(allocated_cpus))
-pool = mp.Pool(allocated_cpus)
-for i in pool.imap_unordered(task, [trace_data_files[100:120], trace_data_files[120:145] ,trace_data_files[145:170], trace_data_files[170:190], trace_data_files[190:]]):
+# total_cpus = psutil.cpu_count()
+# allocated_cpus = (total_cpus //4)
+# print("Total allocated cpus: {}".format(allocated_cpus))
+pool = mp.Pool(2)
+for i in pool.imap_unordered(task, [cadet_data_files[0:5], cadet_data_files[5:]]):
     print(i)
     continue  
+
+end_time = dt.now()
+print("Ending time of the program: {}".format(str(end_time)))
+# psql_connection_url = 'postgresql+pg8000://cpsc538p:12345678@localhost/darpa_tc3_cadets'
+# psql_engine = create_engine(psql_connection_url)
+
+# orm.BASE.metadata.create_all(psql_engine)
+
+# tempFileObj= orm.FileObject("-1", "-1", 20, "ROTTEN_FILE", 5, "PRINCIPAL", 250, 0)
+
+# Session = sessionmaker(bind=psql_engine)
+# session = Session()
+
+# session.add(tempFileObj)
+# session.commit()
+# session.close()
 
 
 

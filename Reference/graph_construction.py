@@ -304,7 +304,7 @@ def encode_src_sink_object(src_sink_oject):
 
 if __name__ == "__main__":
 
-    psql_connection_url = 'postgresql+psycopg2://csephase2:csephase@@localhost/darpa_tc3'
+    psql_connection_url = 'postgresql+pg8000://cpsc538p:12345678@localhost/darpa_tc3_cadets'
     psql_engine = create_engine(psql_connection_url)
     Session = sessionmaker(bind=psql_engine)
     session = Session()
