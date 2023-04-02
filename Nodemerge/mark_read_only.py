@@ -18,7 +18,7 @@ def findReadOnlyFiles():
     # number_of_files = session.query(func.count(orm.FileObject.id)).scalar()
     # print(number_of_events, number_of_subjects, number_of_files)
     skeleton_update_query = 'UPDATE \"FileObject\" set readonly=0 WHERE uuid = \'{}\';'
-    result = session.execute('SELECT * FROM \"Event\" WHERE type = \'EVENT_WRITE\' ');
+    result = session.execute('SELECT * FROM \"Event\" WHERE type = \'EVENT_WRITE\' ')
     batch_size = 10000
     count = 1
     batch_count = 0
