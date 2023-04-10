@@ -20,23 +20,34 @@ def createJson():
         "NetflowObject": 8,
         "SrcSinkObject": 9,
         "RegistryKeyObject": 12}
+    
+    offset_dict = {
+        "Host": 0,
+        "Principal": 3,
+        "Subject": 67,
+        "FileObject": 224696,
+        "UnnamedPipeObject": 2728098,
+        "NetflowObject": 2784773,
+        "SrcSinkObject": 2940095,
+        "RegistryKeyObject": 3053445}
 
     tables = mapping_dict.keys()
     psql_connection_url = 'postgresql+pg8000://cpsc538p:12345678@localhost/darpa_tc3_cadets'
     engine = create_engine(psql_connection_url)
     Session = sessionmaker(bind=engine)
     session = Session()
+    
     for table in tables:
         print("Starting for {} table".format(table))
-        result = session.execute('SELECT uuid FROM \"'+table+'\"')
-        table_uuids = [row[0] for row in result]
-        print("{} rows in table {}".format(len(table_uuids), table))
-        elementCounter += len(table_uuids)
-        for uuid in table_uuids:
-            if uuid not in mappingJson.keys():
-                mappingJson[uuid] = mapping_dict[table]
+        result = session.execute('SELECT id, uuid FROM \"'+table+'\"')
+        table_id_uuids = [(row[0], row[1]) for row in result]
+        print("{} rows in table {}".format(len(table_id_uuids), table))
+        elementCounter += len(table_id_uuids)
+        for id_uuid in table_id_uuids:
+            if id_uuid[1] not in mappingJson.keys():
+                mappingJson[id_uuid[1]] = [ mapping_dict[table], id_uuid[0]+offset_dict[table] ]
             else:
-                if mapping_dict[table] != mappingJson[uuid]:
+                if mapping_dict[table] != mappingJson[id_uuid[1]]:
                     print("MISMATCH")
                 duplicateCounter += 1
         print("Finished for {} table".format(table))
@@ -47,5 +58,6 @@ def createJson():
     print("Duplicate counter: {}".format(duplicateCounter))
     
     with open("index_file.json", "w") as outputFile:
-        json.dump(mappingJson, outputFile)
+        json.dump(mappingJson, outputFile, indent=4, separators=(',', ': '))
+
 createJson()
