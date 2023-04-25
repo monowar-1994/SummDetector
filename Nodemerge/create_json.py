@@ -45,7 +45,8 @@ def createJson():
         elementCounter += len(table_id_uuids)
         for id_uuid in table_id_uuids:
             if id_uuid[1] not in mappingJson.keys():
-                mappingJson[id_uuid[1]] = [ mapping_dict[table], id_uuid[0]+offset_dict[table] ]
+                mappingJson[id_uuid[1]] = [ mapping_dict[table], id_uuid[0]+offset_dict[table], table ]
+                mappingJson[id_uuid[0]+offset_dict[table]] = id_uuid[1]
             else:
                 if mapping_dict[table] != mappingJson[id_uuid[1]]:
                     print("MISMATCH")
