@@ -64,8 +64,9 @@ def get_decoded_path(base64_encoded_path):
     return a.decode('ascii')
 
 def get_and_prune_the_input_graph(graph_file_location):
-    graph = nx.read_edgelist(
-        graph_file_location, nodetype=int, data=True, create_using=nx.MultiDiGraph)
+    # graph = nx.read_edgelist(
+    #     graph_file_location, nodetype=int, data=True, create_using=nx.MultiDiGraph)
+    graph = nx.MultiDiGraph(nx.read_edgelist(graph_file_location))
     edge_set = graph.edges(data=True)
     pruned_graph_edge_set = set()
     for edge in edge_set:
