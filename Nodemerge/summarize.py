@@ -82,9 +82,9 @@ def get_and_prune_the_input_graph(graph_file_location):
 def get_indices(index_file_location, reverse_index_file_location):
     global index
     global reverse_idx
-    index = json.load(index_file_location)
+    index = json.load(open(index_file_location, 'r'))
     print("Index Loaded.")
-    reverse_idx = json.load(reverse_index_file_location)
+    reverse_idx = json.load(open(reverse_index_file_location, 'r'))
     print("Reverse Index Loaded")
 
 
@@ -237,7 +237,14 @@ def get_common_filepath(holder):
 
     return common_path    
 
-def match_file_pattern(sequence, template, template_id):
+def string_representation_of_template_instance(temp_holder, id):
+    ret = str(id)+" : "
+    for item in temp_holder:
+        ret += str(item[1])
+    ret += "\n"
+    return ret 
+
+def match_file_pattern(sequence, template, template_id, history_holder):
     # template should be a set (Second Parameter)
     # sequence should be list of outgoing edges of a process node sorted in the timestamp order (First Parameter)
     return_sequence = list()
@@ -254,15 +261,22 @@ def match_file_pattern(sequence, template, template_id):
     while idx<count:
         if sequence[idx][1] not in template:
             template_match_flag = check_flags(flags)
+            
             if template_match_flag:
                 property_dict = dict()
                 property_dict["source_type"] = 4
                 property_dict["dest_type"] = template_types["FILE"] # This is the type of the template of 
                 property_dict["event_type"] = "EVENT_READ"
                 property_dict["timestamp"] = get_average(timestamps)
-                property_dict["attr"] = get_common_filepath(temp_holder)
+                property_dict["attr"] = get_encoded_string(get_common_filepath(temp_holder)) # Base64
+                
                 data = (sequence[idx][0], template_id, property_dict)
                 return_sequence.append(data)
+
+                history = open(history_holder, 'a')
+                history.write(string_representation_of_template_instance(temp_holder, template_id))
+                history.close()
+
             else: # If we did not find a template
                 for item in temp_holder:
                     return_sequence.append(item)
@@ -281,8 +295,15 @@ def match_file_pattern(sequence, template, template_id):
 
     return return_sequence
 
-def summarize(templates, sorted_order, graph, process_nodes, debug = False):
+def original_match_file_pattern(sequence, template, template_id):
+    pass
+
+def summarize(templates, sorted_order, graph, process_nodes, history_file, debug = False):
     summarized_graph = nx.MultiDiGraph()
+    # Clearing the previous history file
+    history = open(history_file, 'w')
+    history.close()
+    # Clearing ends
     for node in process_nodes:
         outgoing_edges = graph.out_edges(node, data= True)
         list_of_outgoing_edges = list(outgoing_edges)
@@ -293,14 +314,39 @@ def summarize(templates, sorted_order, graph, process_nodes, debug = False):
         # Reminder: Sorted order is a list
         for template_key in sorted_order:
             actual_template = templates[template_key[0]]
-            compressed_list_of_outgoing_edges = match_file_pattern(temp_list, actual_template, template_key[0])
+            
+            compressed_list_of_outgoing_edges = match_file_pattern(temp_list, actual_template, template_key[0], history_file)
             temp_list = list(compressed_list_of_outgoing_edges)
 
+        for edge in temp_list:
+            summarized_graph.add_edges_from([(edge[0], edge[1], edge[2])])
 
-def learn(graph_file, index_file, ridx_file, database_type, learn_templates, use_templates):
+    return summarized_graph
+        
+def print_statistics(pruned_graph, summarized_graph):
+    pruned_node_count = pruned_graph.number_of_nodes()
+    summarized_node_count = summarized_graph.number_of_nodes()
+    if pruned_node_count != 0:
+        print("Summarized / Pruned node count ratio: {}".format(summarized_node_count/pruned_node_count))
+    else:
+        print("Pruned node count is 0.")
+
+
+    pruned_edge_count = pruned_graph.number_of_edges()
+    summarized_edge_count = summarized_graph.number_of_edges()
+    if pruned_node_count != 0:
+        print("Summarized / Pruned edge count ratio: {}".format(summarized_edge_count/pruned_edge_count))
+    else:
+        print("Pruned edge count is 0.")
+
+
+
+def learn_or_load_then_summarize(graph_file, index_file, ridx_file, database_type, learn_templates, use_templates, template_dictionary, template_history):
     get_indices(index_file, ridx_file)
     original_graph, pruned_graph = get_and_prune_the_input_graph(graph_file)
+    print("Original Graph and Pruned Graph Loaded.")
     timestamp_map = get_timestamp_map(pruned_graph)
+    print("Timestamp Map Loaded.")
 
     if database_type == CADET:
         psql_connection_url = 'postgresql+pg8000://cpsc538p:12345678@localhost/darpa_tc3_cadets'
@@ -315,17 +361,26 @@ def learn(graph_file, index_file, ridx_file, database_type, learn_templates, use
     session = Session()
 
     read_only_status = get_read_only_status(session)
+    print("Read Only Status Loaded")
     if learn_templates:
         templates = learn_rof_templates(read_only_status, timestamp_map, pruned_graph, debug_info= False)
+        json.dump(templates, open(template_dictionary, 'w'))
         sorted_templates = get_template_order(templates)
+        print("Template Learned.")
     if use_templates:
+        print("Template Loaded.")
         pass
-
+    
+    print("Template Ready.")
     pruned_node_set = pruned_graph.nodes()
     process_nodes = [node for node in pruned_node_set if reverse_idx[str(node)][0] == 4]
-
-
-    
+    print("Starting Summarization.")
+    summarized_graph = summarize(templates, sorted_templates, pruned_graph, process_nodes, template_history, debug = False)
+    print("Summarization Complete.")
+    print_statistics(pruned_graph, summarized_graph)
+    summary_graph_filename = os.path.splitext(graph_file)[0]+"_summary_v1.edgelist"
+    nx.write_edgelist(summarized_graph, summary_graph_filename, data = True)
+    print("Wrapped up. Exiting.")
 
 
 if __name__ == '__main__':
@@ -334,19 +389,20 @@ if __name__ == '__main__':
     parser.add_argument('graph_filename')
     parser.add_argument('--learn-templates', action='store_true')
     parser.add_argument('--use-templates', action='store_true')
-    parser.add_argument('-to', '--template-order',
-                        help='Json file that contains the list of the templates in sortted order.')
+    parser.add_argument('-th', '--template-history',
+                        help='Json file that contains the list of the templates used in summarization.')
     parser.add_argument('-td', '--template-dict',
-                        help='Json file that contains the template dictionry')
+                        help='Json file that contains the template dictionary')
     parser.add_argument('-idx', '--index-file',
                         help='Location of the index file to reduce computation time.')
     parser.add_argument('-ridx', '--reverse-index-file',
                         help='Loaction of the reverse index file to reduce computation time.')
     parser.add_argument('-cfg', '--config-file',
-                        help='Json file that holds all the configuration information. If you dont have index or reverse index info, you must add the config file location where it is listed.')
+                        help='Json file that holds all the configuration information. If you dont have index or reverse index info, you must add the config file location where it is listed.') # Config parser is still to be implemented
     parser.add_argument('--cadets', action='store_true')
-    # Note that this should be removed in later version in favor of list based parsing
+    # Note that this should be removed in later version in favor of list based parsing so that more db can be added without trouble
     parser.add_argument('--theia', action='store_true')
+   
 
     args = parser.parse_args()
 
@@ -357,7 +413,7 @@ if __name__ == '__main__':
     index_file = args.index_file
     reverse_index_file = args.reverse_index_file
     is_cadet = args.cadets
-    is_theia = args.theia
+    is_theia = args.theia 
 
     if index_file is None and reverse_index_file is None:
         if config_file is None:
@@ -372,18 +428,34 @@ if __name__ == '__main__':
                 print("Reverse index file location is missing. Please specify that in the command line or just use the config file for all operations.")
                 exit(6)
 
+
+    template_history_file = args.template_history
+    template_dictionary_file = args.template_dict
+    if template_history_file is None:
+        print("Please provide the absolute file path of the sorted templates.")
+        exit(2)
+    if template_dictionary_file is None:
+        print("Please provide the absoluet file path of the templated dictionary.")
+        exit(3)
+
     if learn_template and not use_template:
         # do some staff
-        pass
+        if is_cadet:
+            learn_or_load_then_summarize(graph_filename, index_file, reverse_index_file, CADET, True, False, template_dictionary_file, template_history_file)
+        elif is_theia:
+            learn_or_load_then_summarize(graph_filename, index_file, reverse_index_file, THEIA, True, False, template_dictionary_file, template_history_file)
+        else:
+            print("Not sure which database to use. Exiting now")
+            exit(20)
+
     elif use_template and not learn_template:
-        template_order_file = args.template_order
-        template_dictionary_file = args.template_dict
-        if template_order_file is None:
-            print("Please provide the absolute file path of the sorted templates.")
-            exit(2)
-        if template_dictionary_file is None:
-            print("Please provide the absoluet file path of the templated dictionary.")
-            exit(3)
+        if is_cadet:
+            learn_or_load_then_summarize(graph_filename, index_file, reverse_index_file, CADET, False, True, template_dictionary_file, template_history_file)
+        elif is_theia:
+            learn_or_load_then_summarize(graph_filename, index_file, reverse_index_file, THEIA, False, True, template_dictionary_file, template_history_file)
+        else:
+            print("Not sure which database to use. Exiting now")
+            exit(21)
         # start summarization from here.
     else:
         print("Use template is {} while learn template is {}".format(
