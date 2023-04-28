@@ -12,7 +12,7 @@ import base64
 import pandas as pd
 from mlxtend.preprocessing import TransactionEncoder
 from mlxtend.frequent_patterns import fpgrowth, association_rules
-
+import gc
 
 CADET = 1
 THEIA = 2
@@ -70,14 +70,15 @@ def get_and_prune_the_input_graph(graph_file_location):
     edge_set = graph.edges(data=True)
     pruned_graph_edge_set = set()
     for edge in edge_set:
-        temp_edge_tuple = (edge[0], edge[1], edge[2]['source_type'], edge[2]
-                           ['dest_type'], edge[2]['event_type'], edge[2]['timestamp'])
+        temp_edge_tuple = (edge[0], edge[1], edge[2]['src_type'], edge[2]
+                           ['dst_type'], edge[2]['event_type'], edge[2]['time'])
         pruned_graph_edge_set.add(temp_edge_tuple)
+    gc.collect()
     pruned_graph = nx.MultiDiGraph()
     for edge in pruned_graph_edge_set:
-        pruned_graph.add_edge(edge[0], edge[1], source_type=edge[2],
-                              dest_type=edge[3], event_type=edge[4], timestamp=edge[5])
-    return graph, pruned_graph
+        pruned_graph.add_edge(edge[0], edge[1], src_type=edge[2],
+                              dst_type=edge[3], event_type=edge[4], time=edge[5])
+    return pruned_graph
 
 
 def get_indices(index_file_location, reverse_index_file_location):
@@ -99,7 +100,11 @@ def get_timestamp_map(pruned_graph):
             if reverse_idx[str(object_id)][0] != 4:
                 miss_count += 1
                 continue
-            start_time = edge[2]["timestamp"]
+            try:
+                start_time = edge[2]["time"]
+            except:
+                print(edge)
+                exit(200)
             timestamp_map[object_id] = start_time
     return timestamp_map
 
@@ -126,7 +131,7 @@ def get_file_access_pattern(timestamp_map, pruned_graph_edges, read_only_dict, d
         subject_id = edge[0]
         object_id = edge[1]
         event_type = edge[2]["event_type"]
-        timestamp = edge[2]["timestamp"]
+        timestamp = edge[2]["time"]
         if event_type == "EVENT_OPEN" or event_type == "EVENT_READ" or event_type == "EVENT_CLOSE" or event_type == "EVENT_MMAP":
             if str(object_id) in reverse_idx:
                 another_count += 1
@@ -265,20 +270,20 @@ def match_file_pattern(sequence, template, template_id, history_holder):
             
             if template_match_flag:
                 property_dict = dict()
-                property_dict["source_type"] = 4
-                property_dict["dest_type"] = template_types["FILE"] # This is the type of the template of 
+                property_dict["src_type"] = 4
+                property_dict["dst_type"] = template_types["FILE"] # This is the type of the template of 
                 property_dict["event_type"] = "EVENT_READ"
-                property_dict["timestamp"] = get_average(timestamps)
+                property_dict["time"] = get_average(timestamps)
                 property_dict["attr"] = get_encoded_string(get_common_filepath(temp_holder)) # Base64
                 
                 data = (sequence[idx][0], template_id, property_dict)
                 return_sequence.append(data)
-
+                
                 history = open(history_holder, 'a')
                 history.write(string_representation_of_template_instance(temp_holder, template_id))
                 history.close()
 
-            else: # If we did not find a template
+            else: # If we did not find a template       
                 for item in temp_holder:
                     return_sequence.append(item)
             
@@ -290,14 +295,47 @@ def match_file_pattern(sequence, template, template_id, history_holder):
             idx+=1
         else:
             temp_holder.append(sequence[idx])
-            timestamps.append(sequence[idx][2]["timestamp"])
+            timestamps.append(sequence[idx][2]["time"])
             flags[sequence[idx][1]] = True
             idx+=1
 
     return return_sequence
 
 def original_match_file_pattern(sequence, template, template_id):
-    pass
+    return_sequence = list()
+    compression_indices = set()
+    time_stamps = list()
+    temp_holder = list()
+    length = len(sequence)
+    if length == 0:
+        return []
+    for i in range(length):
+        current_edge = sequence[i]
+        src = current_edge[0]
+        dest = current_edge[1]
+        properties = current_edge[2]
+        
+        if dest in template:
+            compression_indices.add(i)
+            time_stamps.append(properties["time"])
+            temp_holder.append(sequence[i])
+    
+    if len(compression_indices) > 0:
+        for i in range(length):
+            if i not in compression_indices:
+                return_sequence.append(sequence[i])
+            
+        data = dict()
+        data["src_type"] = 4
+        data["dst_type"] = template_types["FILE"] # This is the type of the template of 
+        data["event_type"] = "EVENT_READ"
+        data["time"] = get_average(time_stamps)
+        data["attr"] = get_encoded_string(get_common_filepath(temp_holder)) # Base64
+
+        return_sequence.append((src, template_id, data))
+
+    return return_sequence
+    
 
 def summarize(templates, sorted_order, graph, process_nodes, history_file, debug = False):
     summarized_graph = nx.MultiDiGraph()
@@ -310,11 +348,13 @@ def summarize(templates, sorted_order, graph, process_nodes, history_file, debug
         list_of_outgoing_edges = list(outgoing_edges)
         if len(list_of_outgoing_edges) == 0:
             continue
-        sorted_list_of_outgoing_edges = sorted(list_of_outgoing_edges, key=lambda x: x[2]['timestamp'])
+        sorted_list_of_outgoing_edges = sorted(list_of_outgoing_edges, key=lambda x: x[2]['time'])
         temp_list = list(sorted_list_of_outgoing_edges)
         # Reminder: Sorted order is a list
         for template_key in sorted_order:
             actual_template = templates[template_key[0]]
+            
+            compressed_list_of_outgoing_edges = match_file_pattern(temp_list, actual_template, template_key[0], history_file)
             
             compressed_list_of_outgoing_edges = match_file_pattern(temp_list, actual_template, template_key[0], history_file)
             temp_list = list(compressed_list_of_outgoing_edges)
@@ -323,6 +363,81 @@ def summarize(templates, sorted_order, graph, process_nodes, history_file, debug
             summarized_graph.add_edges_from([(edge[0], edge[1], edge[2])])
 
     return summarized_graph
+        
+# def print_statistics(pruned_graph, summarized_graph):
+#     pruned_node_count = pruned_graph.number_of_nodes()
+#     summarized_node_count = summarized_graph.number_of_nodes()
+#     if pruned_node_count != 0:
+#         print("Summarized / Pruned node count ratio: {}".format(summarized_node_count/pruned_node_count))
+#     else:
+#         print("Pruned node count is 0.")
+
+
+#     pruned_edge_count = pruned_graph.number_of_edges()
+#     summarized_edge_count = summarized_graph.number_of_edges()
+#     if pruned_node_count != 0:
+#         print("Summarized / Pruned edge count ratio: {}".format(summarized_edge_count/pruned_edge_count))
+#     else:
+#         print("Pruned edge count is 0.")
+
+
+
+# def learn_or_load_then_summarize(graph_file, index_file, ridx_file, database_type, learn_templates, use_templates, template_dictionary, template_history):
+#     get_indices(index_file, ridx_file)
+#     pruned_graph = get_and_prune_the_input_graph(graph_file)
+#     print("Pruned Graph Loaded.")
+#     timestamp_map = get_timestamp_map(pruned_graph)
+#     print("Timestamp Map Loaded.")
+
+#     if database_type == CADET:
+#         psql_connection_url = 'postgresql+pg8000://cpsc538p:12345678@localhost/darpa_tc3_cadets'
+#     elif database_type == THEIA:
+#         psql_connection_url = 'postgresql+pg8000://cpsc538p:12345678@localhost/darpa_tc3_theia'
+#     else:
+#         print("Database not specified. Exiting now.")
+#         exit(8)
+
+#     engine = create_engine(psql_connection_url)
+#     Session = sessionmaker(bind=engine)
+#     session = Session()
+
+#     read_only_status = get_read_only_status(session)
+#     print("Read Only Status Loaded")
+
+#     if learn_templates:
+#         templates = learn_rof_templates(read_only_status, timestamp_map, pruned_graph, debug_info= False)
+#         json.dump(templates, open(template_dictionary, 'w'))
+#         sorted_templates = get_template_order(templates)
+#         print("Template Learned.")
+    
+#     elif use_templates:
+
+#         loaded_templates = json.load(open(template_dictionary, 'r'))
+#         templates = dict()
+
+#         for key in loaded_templates:
+#             template_id_from_key = int(key)
+#             template_list = loaded_templates[key]
+#             t_list = list()
+#             for item in template_list:
+#                 t_list.append(int(item))
+#             templates[template_id_from_key] = t_list
+
+#         sorted_templates = get_template_order(templates)
+#         print(templates)
+#         print("Template Loaded.")
+    
+#     print("Template Ready.")
+#     pruned_node_set = pruned_graph.nodes()
+#     process_nodes = [node for node in pruned_node_set if reverse_idx[str(node)][0] == 4]
+#     print("Starting Summarization.")
+#     summarized_graph = summarize(templates, sorted_templates, pruned_graph, process_nodes, template_history, debug = False)
+#     print("Summarization Complete.")
+#     print_statistics(pruned_graph, summarized_graph)
+#     summary_graph_filename = os.path.splitext(graph_file)[0]+"_summary_v1.edgelist"
+#     nx.write_edgelist(summarized_graph, summary_graph_filename, data = True)
+#     print("Wrapped up. Exiting.")
+# 
         
 def print_statistics(pruned_graph, summarized_graph):
     pruned_node_count = pruned_graph.number_of_nodes()
@@ -344,8 +459,8 @@ def print_statistics(pruned_graph, summarized_graph):
 
 def learn_or_load_then_summarize(graph_file, index_file, ridx_file, database_type, learn_templates, use_templates, template_dictionary, template_history):
     get_indices(index_file, ridx_file)
-    original_graph, pruned_graph = get_and_prune_the_input_graph(graph_file)
-    print("Original Graph and Pruned Graph Loaded.")
+    pruned_graph = get_and_prune_the_input_graph(graph_file)
+    print("Pruned Graph Loaded.")
     timestamp_map = get_timestamp_map(pruned_graph)
     print("Timestamp Map Loaded.")
 
@@ -363,14 +478,29 @@ def learn_or_load_then_summarize(graph_file, index_file, ridx_file, database_typ
 
     read_only_status = get_read_only_status(session)
     print("Read Only Status Loaded")
+
     if learn_templates:
         templates = learn_rof_templates(read_only_status, timestamp_map, pruned_graph, debug_info= False)
         json.dump(templates, open(template_dictionary, 'w'))
         sorted_templates = get_template_order(templates)
         print("Template Learned.")
-    if use_templates:
+    
+    elif use_templates:
+
+        loaded_templates = json.load(open(template_dictionary, 'r'))
+        templates = dict()
+
+        for key in loaded_templates:
+            template_id_from_key = int(key)
+            template_list = loaded_templates[key]
+            t_list = list()
+            for item in template_list:
+                t_list.append(int(item))
+            templates[template_id_from_key] = t_list
+
+        sorted_templates = get_template_order(templates)
+        print(templates)
         print("Template Loaded.")
-        pass
     
     print("Template Ready.")
     pruned_node_set = pruned_graph.nodes()
@@ -405,6 +535,8 @@ if __name__ == '__main__':
     parser.add_argument('--theia', action='store_true')
    
 
+   
+
     args = parser.parse_args()
 
     graph_filename = args.graph_filename
@@ -414,6 +546,7 @@ if __name__ == '__main__':
     index_file = args.index_file
     reverse_index_file = args.reverse_index_file
     is_cadet = args.cadets
+    is_theia = args.theia 
     is_theia = args.theia 
 
     if index_file is None and reverse_index_file is None:
@@ -457,7 +590,6 @@ if __name__ == '__main__':
         else:
             print("Not sure which database to use. Exiting now")
             exit(21)
-        # start summarization from here.
     else:
         print("Use template is {} while learn template is {}".format(
             use_template, learn_template))

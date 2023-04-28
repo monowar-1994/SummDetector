@@ -79,22 +79,22 @@ def batched_event_load( session, start_idx, end_idx, graph, flag = 0):
                     predicate_obj1_info = get_info(predicate_obj1)
                     if predicate_obj1_info is not None:
                         if predicate_obj1_info[0] == 5:
-                            graph.add_edge(s_id, predicate_obj1_info[1] , source_type = s_type, dest_type = predicate_obj1_info[0], event_type = e_type, timestamp = logical_timestamp, event_id = e_id, attr = predicate_object_path1)
+                            graph.add_edge(s_id, predicate_obj1_info[1] , src_type = s_type, dst_type = predicate_obj1_info[0], event_type = e_type, time = logical_timestamp, id = e_id, attr = predicate_object_path1)
                         elif predicate_obj1_info[0] == 8:
-                            graph.add_edge(s_id, predicate_obj1_info[1] , source_type = s_type, dest_type = predicate_obj1_info[0], event_type = e_type, timestamp = logical_timestamp, event_id = e_id, attr = get_socket_address(predicate_obj1))
+                            graph.add_edge(s_id, predicate_obj1_info[1] , src_type = s_type, dst_type = predicate_obj1_info[0], event_type = e_type, time = logical_timestamp, id = e_id, attr = get_socket_address(predicate_obj1))
                         else:
-                            graph.add_edge(s_id, predicate_obj1_info[1] , source_type = s_type, dest_type = predicate_obj1_info[0], event_type = e_type, timestamp = logical_timestamp, event_id = e_id)
+                            graph.add_edge(s_id, predicate_obj1_info[1] , src_type = s_type, dst_type = predicate_obj1_info[0], event_type = e_type, time = logical_timestamp, id = e_id)
 
                 
                 if predicate_obj2 is not None:
                     predicate_obj2_info = get_info(predicate_obj2)
                     if predicate_obj2_info is not None:
                         if predicate_obj2_info[0] == 5:
-                            graph.add_edge(s_id, predicate_obj2_info[1] , source_type = s_type, dest_type = predicate_obj2_info[0], event_type = e_type, timestamp = logical_timestamp, event_id = e_id, attr=predicate_object_path2)
+                            graph.add_edge(s_id, predicate_obj2_info[1] , src_type = s_type, dst_type = predicate_obj2_info[0], event_type = e_type, time = logical_timestamp, id = e_id, attr=predicate_object_path2)
                         elif predicate_obj2_info[0] == 8:
-                            graph.add_edge(s_id, predicate_obj2_info[1] , source_type = s_type, dest_type = predicate_obj2_info[0], event_type = e_type, timestamp = logical_timestamp, event_id = e_id, attr=get_socket_address(predicate_obj2))
+                            graph.add_edge(s_id, predicate_obj2_info[1] , src_type = s_type, dst_type = predicate_obj2_info[0], event_type = e_type, time = logical_timestamp, id = e_id, attr=get_socket_address(predicate_obj2))
                         else:
-                            graph.add_edge(s_id, predicate_obj2_info[1] , source_type = s_type, dest_type = predicate_obj2_info[0], event_type = e_type, timestamp = logical_timestamp, event_id = e_id)
+                            graph.add_edge(s_id, predicate_obj2_info[1] , src_type = s_type, dst_type = predicate_obj2_info[0], event_type = e_type, time = logical_timestamp, id = e_id)
 
             except Exception:
                 print(e_id, subject_id, e_type, predicate_obj1, predicate_obj2)
@@ -184,10 +184,10 @@ def dump_graphs(graph_list, destination_dir):
         count+=1
         print("Dump Complete for Graph: {}".format(str(count)))
 
-execute(_flag=0)
-relevant_train_graphs = get_graphs(training_graph)
-dump_graphs(relevant_train_graphs, training_graph_path)
+# execute(_flag=0)
+# relevant_train_graphs = get_graphs(training_graph)
+# dump_graphs(relevant_train_graphs, training_graph_path)
 
-# execute(_flag=1)
-# relevant_test_graphs = get_graphs(testing_graph)
-# dump_graphs(relevant_test_graphs, testing_graph_path)
+execute(_flag=1)
+relevant_test_graphs = get_graphs(testing_graph)
+dump_graphs(relevant_test_graphs, testing_graph_path)
