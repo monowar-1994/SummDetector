@@ -1,0 +1,22 @@
+original cadets:
+edges: 12062505
+nodes: 2675741
+disk consumption:
+    edge list file: 936776637 Bytes (894MB)
+    UUID and Node ID mapping file: 227311030 Bytes (217MB)
+
+original nodemerge (v0):
+edges: 10826980
+nodes: 2675739
+disk consumption:
+    edge list file: 818299853 Bytes (781MB)
+    template files: 1849 Btyes
+    UUID and Node ID mapping file: 227311030 Bytes (217MB)
+
+improved nodemerge (v1):
+edges: 11439390
+nodes: 2675764
+disk consumption:
+    edge list file: 865521505 Btyes (826M)
+    template files: 1946 Btyes
+    UUID and Node ID mapping file: 227311030 Bytes (217MB)
