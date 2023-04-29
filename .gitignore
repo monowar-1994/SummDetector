@@ -5,3 +5,5 @@ Nodemerge/__pycache__/db_classes.cpython-310.pyc
 Nodemerge/index_file.json
 Nodemerge/Testing_graphs
 Nodemerge/Training_graphs
+Nodemerge/reverse_index.json
+*.json
